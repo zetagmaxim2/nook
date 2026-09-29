@@ -1,0 +1,15 @@
+{
+  "name": "Nook — Personal Utilities",
+  "short_name": "Nook",
+  "description": "A private, offline home for everyday tools.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0c111a",
+  "theme_color": "#0c111a",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
