@@ -58,17 +58,18 @@ export function financeCalculation(
   date = new Date(),
 ) {
   const today = localDate(date);
-  const end = localDate(new Date(date.getFullYear(), date.getMonth(), 28));
-  if (date.getDate() > 28)
-    return { ended: true, days: 0, start: today, end, target: 0 };
-  const days = 28 - date.getDate() + (includeToday ? 1 : 0);
   const start = includeToday ? today : addDays(today, 1);
+  const thisEnd = localDate(new Date(date.getFullYear(), date.getMonth(), 28));
+  const end =
+    start <= thisEnd
+      ? thisEnd
+      : localDate(new Date(date.getFullYear(), date.getMonth() + 1, 28));
+  const days = dayDiff(start, end) + 1;
   return {
-    ended: days <= 0,
     days,
     start,
     end,
-    target: days > 0 ? amount / days : 0,
+    target: amount / days,
   };
 }
 export const downloadJson = (data: unknown, filename: string) => {

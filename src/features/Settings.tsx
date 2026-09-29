@@ -115,13 +115,13 @@ export function SettingsPage({
           </button>
         ))}
       </Card>
-      <h2 className="section-title">Dashboard</h2>
+      <h2 className="section-title">Home</h2>
       <Card
         className="settings-row"
         onClick={() => location.assign("/?configure=1")}
       >
         <span>
-          Configure widgets<small>Add, hide, and reorder dashboard cards</small>
+          Pinned counters<small>Choose what appears on your Home screen</small>
         </span>
         <ChevronRight />
       </Card>

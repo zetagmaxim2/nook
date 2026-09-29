@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Pin, Trash2 } from "lucide-react";
 import { all, put, remove } from "../db";
 import type { Counter } from "../types";
 import { dayDiff, formatDate, id, localDate } from "../utils";
@@ -47,6 +47,11 @@ export default function Counters({ notify }: { notify: (s: string) => void }) {
       notify("Counter deleted");
     }
   };
+  const togglePin = async (counter: Counter) => {
+    await put("counters", { ...counter, pinned: !counter.pinned });
+    load();
+    notify(counter.pinned ? "Counter unpinned" : "Counter pinned to Home");
+  };
   return (
     <div className="page">
       <PageHeader
@@ -84,6 +89,7 @@ export default function Counters({ notify }: { notify: (s: string) => void }) {
                         setOpen(true);
                       }}
                       onDelete={() => setDel(c)}
+                      onPin={() => togglePin(c)}
                     />
                   ))}
                 </div>
@@ -117,10 +123,12 @@ function CounterCard({
   counter,
   onEdit,
   onDelete,
+  onPin,
 }: {
   counter: Counter;
   onEdit: () => void;
   onDelete: () => void;
+  onPin: () => void;
 }) {
   const diff = dayDiff(localDate(), counter.date);
   let big = "",
@@ -149,6 +157,12 @@ function CounterCard({
       <div className="counter-top">
         <span>{counter.icon}</span>
         <div>
+          <IconButton
+            label={counter.pinned ? "Unpin from Home" : "Pin to Home"}
+            onClick={onPin}
+          >
+            <Pin fill={counter.pinned ? "currentColor" : "none"} />
+          </IconButton>
           <IconButton label="Edit counter" onClick={onEdit}>
             <Pencil />
           </IconButton>

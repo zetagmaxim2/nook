@@ -88,9 +88,11 @@ export async function get<T>(
 export async function put<T>(store: StoreName, value: T): Promise<void> {
   const db = await getDb();
   return new Promise((res, rej) => {
-    const r = db.transaction(store, "readwrite").objectStore(store).put(value);
-    r.onsuccess = () => res();
-    r.onerror = () => rej(r.error);
+    const tx = db.transaction(store, "readwrite");
+    tx.objectStore(store).put(value);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+    tx.onabort = () => rej(tx.error);
   });
 }
 export async function remove(

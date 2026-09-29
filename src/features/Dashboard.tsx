@@ -1,88 +1,144 @@
 import { useEffect, useState } from "react";
 import {
-  BookOpen,
-  WalletCards,
-  ListChecks,
-  Timer,
-  Eye,
-  EyeOff,
-  ChevronUp,
-  ChevronDown,
+  Check,
+  ChevronRight,
+  Pin,
+  Plus,
   SlidersHorizontal,
+  WalletCards,
 } from "lucide-react";
 import { all, put } from "../db";
-import type {
-  DashboardWidget,
-  Novel,
-  Chapter,
-  FinancePlan,
-  Habit,
-  HabitCompletion,
-  Counter,
-} from "../types";
+import { currentBudgetPlan, saveBudget } from "../finance";
+import type { Counter, FinancePlan, Habit, HabitCompletion } from "../types";
 import {
-  localDate,
-  monthKey,
-  financeCalculation,
-  money,
   dayDiff,
+  financeCalculation,
+  formatDate,
+  id,
+  localDate,
+  money,
 } from "../utils";
-import { Card, PageHeader, Button, Sheet, IconButton } from "../ui";
-const labels = {
-  finance: "Daily budget",
-  habits: "Habits",
-  counters: "Counters",
-  novels: "Novels",
-};
-export function Dashboard({
-  nav,
-  version,
-  refresh,
-}: {
-  nav: (p: string) => void;
+import { Button, Card, ErrorNote, IconButton, PageHeader, Sheet } from "../ui";
+
+type Props = {
+  nav: (path: string) => void;
   version: number;
   refresh: () => void;
-}) {
-  const [widgets, setWidgets] = useState<DashboardWidget[]>([]);
-  const [data, setData] = useState<any>({});
-  const [edit, setEdit] = useState(
+  notify: (message: string) => void;
+};
+
+export function Dashboard({ nav, version, refresh, notify }: Props) {
+  const [plans, setPlans] = useState<FinancePlan[]>([]);
+  const [amount, setAmount] = useState("");
+  const [includeToday, setIncludeToday] = useState(true);
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [completions, setCompletions] = useState<HabitCompletion[]>([]);
+  const [counters, setCounters] = useState<Counter[]>([]);
+  const [pinSheet, setPinSheet] = useState(
     () => new URLSearchParams(location.search).get("configure") === "1",
   );
+  const [budgetError, setBudgetError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [habitBusy, setHabitBusy] = useState(false);
+
   useEffect(() => {
     Promise.all([
-      all<DashboardWidget>("widgets"),
-      all<Novel>("novels"),
-      all<Chapter>("chapters"),
       all<FinancePlan>("financePlans"),
       all<Habit>("habits"),
       all<HabitCompletion>("habitCompletions"),
       all<Counter>("counters"),
-    ]).then(([w, n, ch, f, h, hc, c]) => {
-      setWidgets(w.sort((a, b) => a.order - b.order));
-      setData({ n, ch, f, h, hc, c });
+    ]).then(([nextPlans, nextHabits, nextCompletions, nextCounters]) => {
+      setPlans(nextPlans);
+      const plan = currentBudgetPlan(nextPlans);
+      setAmount(plan ? String(plan.amount) : "");
+      setIncludeToday(plan?.includeToday ?? true);
+      setHabits(nextHabits);
+      setCompletions(nextCompletions);
+      setCounters(nextCounters);
     });
   }, [version]);
+
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const update = async (w: DashboardWidget) => {
-    await put("widgets", w);
-    setWidgets((x) =>
-      x.map((a) => (a.id === w.id ? w : a)).sort((a, b) => a.order - b.order),
+  const plan = currentBudgetPlan(plans);
+  const value = Number(amount);
+  const validAmount = Number.isFinite(value) && value > 0;
+  const calculation = financeCalculation(validAmount ? value : 0, includeToday);
+  const changed = amount !== (plan ? String(plan.amount) : "");
+  const target =
+    !changed && plan?.dailyTarget != null
+      ? plan.dailyTarget
+      : calculation.target;
+  const periodEnd =
+    !changed && plan?.periodEnd ? plan.periodEnd : calculation.end;
+  const creatine =
+    habits.find((habit) => habit.id === "habit-creatine") ||
+    habits.find((habit) => /creatine/i.test(habit.name));
+  const today = localDate();
+  const completion = completions.find(
+    (entry) => entry.habitId === creatine?.id && entry.date === today,
+  );
+  const creatineDone = !!completion?.completed;
+  const pinned = counters.filter((counter) => counter.pinned);
+
+  const submitBudget = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      await saveBudget(value, includeToday);
+      setBudgetError("");
+      notify("Budget saved");
+      refresh();
+    } catch (error) {
+      setBudgetError(
+        error instanceof Error ? error.message : "Could not save budget.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleCreatine = async () => {
+    if (habitBusy) return;
+    setHabitBusy(true);
+    try {
+      if (!creatine) {
+        await put("habits", {
+          id: "habit-creatine",
+          name: "Take creatine",
+          icon: "✓",
+          createdAt: new Date().toISOString(),
+          active: true,
+        } satisfies Habit);
+      } else if (!creatine.active) {
+        await put("habits", { ...creatine, active: true });
+      }
+      await put("habitCompletions", {
+        id: completion?.id || id(),
+        habitId: creatine?.id || "habit-creatine",
+        date: today,
+        completed: !creatineDone,
+      } satisfies HabitCompletion);
+      refresh();
+      notify(
+        creatineDone ? "Creatine unchecked" : "Creatine checked for today",
+      );
+    } catch {
+      notify("Could not update creatine");
+    } finally {
+      setHabitBusy(false);
+    }
+  };
+
+  const togglePin = async (counter: Counter) => {
+    const updated = { ...counter, pinned: !counter.pinned };
+    await put("counters", updated);
+    setCounters((items) =>
+      items.map((item) => (item.id === counter.id ? updated : item)),
     );
-    refresh();
   };
-  const move = async (w: DashboardWidget, d: number) => {
-    const vis = widgets;
-    const idx = vis.findIndex((x) => x.id === w.id);
-    const other = vis[idx + d];
-    if (!other) return;
-    await Promise.all([
-      put("widgets", { ...w, order: other.order }),
-      put("widgets", { ...other, order: w.order }),
-    ]);
-    refresh();
-  };
+
   return (
     <div className="page dashboard">
       <PageHeader
@@ -93,140 +149,176 @@ export function Dashboard({
           day: "numeric",
         }).format(new Date())}
         action={
-          <IconButton label="Configure dashboard" onClick={() => setEdit(true)}>
+          <IconButton
+            label="Choose pinned counters"
+            onClick={() => setPinSheet(true)}
+          >
             <SlidersHorizontal />
           </IconButton>
         }
       />
-      <div className="widget-grid">
-        {widgets
-          .filter((w) => w.visible)
-          .map((w) => (
-            <Widget key={w.id} type={w.type} data={data} nav={nav} />
-          ))}
-      </div>
+
+      <Card className="home-budget">
+        <div className="home-card-top">
+          <span className="eyebrow">
+            <WalletCards /> Daily budget
+          </span>
+          <button className="text-link" onClick={() => nav("/finance")}>
+            History <ChevronRight />
+          </button>
+        </div>
+        <strong className="home-budget-value">
+          {validAmount ? money(target) : "Set a budget"}
+        </strong>
+        <p className="home-budget-caption">
+          {changed && validAmount ? "Preview · " : ""}
+          {changed || !plan
+            ? `${calculation.days} days`
+            : "Your saved target"}{" "}
+          through {formatDate(periodEnd, { month: "short", day: "numeric" })}
+        </p>
+        <form className="home-budget-form" onSubmit={submitBudget}>
+          <label>
+            <span>Amount available</span>
+            <div className="money-input">
+              <input
+                className="input"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="Enter amount"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
+              <span>DH</span>
+            </div>
+          </label>
+          <Button type="submit" disabled={!validAmount || saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </form>
+        <ErrorNote>{budgetError}</ErrorNote>
+      </Card>
+
+      <Card className={`home-creatine ${creatineDone ? "done" : ""}`}>
+        <button
+          className="home-creatine-check"
+          onClick={toggleCreatine}
+          disabled={habitBusy}
+          aria-label={
+            creatineDone
+              ? "Mark creatine not taken today"
+              : "Mark creatine taken today"
+          }
+          aria-pressed={creatineDone}
+        >
+          {creatineDone && <Check />}
+        </button>
+        <div>
+          <span className="eyebrow">Today’s habit</span>
+          <strong>Take creatine</strong>
+          <p>
+            {creatineDone
+              ? "Done for today"
+              : "Tap the check when you’ve taken it"}
+          </p>
+        </div>
+        <IconButton label="View habit history" onClick={() => nav("/habits")}>
+          <ChevronRight />
+        </IconButton>
+      </Card>
+
+      <section className="home-pinned" aria-labelledby="pinned-title">
+        <div className="home-section-heading">
+          <div>
+            <span className="eyebrow">Keep in sight</span>
+            <h2 id="pinned-title">Pinned counters</h2>
+          </div>
+          <button className="text-link" onClick={() => setPinSheet(true)}>
+            Edit <ChevronRight />
+          </button>
+        </div>
+        {pinned.length ? (
+          <div className="home-counter-grid">
+            {pinned.map((counter) => {
+              const days = dayDiff(today, counter.date);
+              const value =
+                counter.type === "up"
+                  ? `${Math.max(0, -days)} days`
+                  : days === 0
+                    ? "Today"
+                    : days > 0
+                      ? `${days} days left`
+                      : `${-days} days ago`;
+              return (
+                <button
+                  className="home-counter"
+                  key={counter.id}
+                  onClick={() => nav("/counters")}
+                >
+                  <span className="home-counter-icon">{counter.icon}</span>
+                  <span className="home-counter-title">{counter.title}</span>
+                  <strong>{value}</strong>
+                  <small>
+                    {formatDate(counter.date, {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </small>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <button className="home-pin-empty" onClick={() => setPinSheet(true)}>
+            <Pin size={19} /> Pin the counters you want to see here{" "}
+            <ChevronRight size={18} />
+          </button>
+        )}
+      </section>
+
       <Sheet
-        open={edit}
-        title="Configure dashboard"
-        onClose={() => setEdit(false)}
+        open={pinSheet}
+        title="Pin counters to Home"
+        onClose={() => setPinSheet(false)}
       >
         <p className="muted">
-          Choose what appears and arrange it in your preferred order.
+          Choose the counters you want to see when you open Nook.
         </p>
-        <div className="configure-list">
-          {widgets.map((w) => (
-            <div key={w.id}>
-              <span>{labels[w.type]}</span>
-              <IconButton label="Move up" onClick={() => move(w, -1)}>
-                <ChevronUp />
-              </IconButton>
-              <IconButton label="Move down" onClick={() => move(w, 1)}>
-                <ChevronDown />
-              </IconButton>
-              <IconButton
-                label={w.visible ? "Hide" : "Show"}
-                onClick={() => update({ ...w, visible: !w.visible })}
+        {counters.length ? (
+          <div className="home-pin-list">
+            {counters.map((counter) => (
+              <button
+                key={counter.id}
+                className={counter.pinned ? "selected" : ""}
+                onClick={() => togglePin(counter)}
+                aria-pressed={!!counter.pinned}
               >
-                {w.visible ? <Eye /> : <EyeOff />}
-              </IconButton>
-            </div>
-          ))}
-        </div>
-        <Button onClick={() => setEdit(false)}>Done</Button>
+                <span>{counter.icon}</span>
+                <b>{counter.title}</b>
+                <Pin
+                  size={19}
+                  fill={counter.pinned ? "currentColor" : "none"}
+                />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">No counters yet. Add one, then pin it here.</p>
+        )}
+        <Button
+          kind="secondary"
+          onClick={() => {
+            setPinSheet(false);
+            nav("/counters");
+          }}
+        >
+          <Plus size={18} />{" "}
+          {counters.length ? "Manage counters" : "Add a counter"}
+        </Button>
+        <Button onClick={() => setPinSheet(false)}>Done</Button>
       </Sheet>
     </div>
-  );
-}
-function Widget({
-  type,
-  data,
-  nav,
-}: {
-  type: DashboardWidget["type"];
-  data: any;
-  nav: (p: string) => void;
-}) {
-  const today = localDate();
-  if (type === "novels") {
-    const words = (data.ch || []).reduce(
-      (s: number, c: Chapter) => s + c.wordCount,
-      0,
-    );
-    return (
-      <Card className="widget" onClick={() => nav("/novels")}>
-        <span className="eyebrow">
-          <BookOpen /> Novels
-        </span>
-        <strong>{data.n?.length || 0} novels</strong>
-        <p>
-          {data.ch?.length || 0} chapters · {words.toLocaleString()} words
-        </p>
-      </Card>
-    );
-  }
-  if (type === "finance") {
-    const plan = (data.f || [])
-      .filter((p: FinancePlan) => p.month === monthKey())
-      .at(-1);
-    const calc = financeCalculation(
-      plan?.amount || 0,
-      plan?.includeToday ?? true,
-    );
-    return (
-      <Card className="widget featured" onClick={() => nav("/finance")}>
-        <span className="eyebrow">
-          <WalletCards /> Daily budget
-        </span>
-        <strong>{plan ? money(calc.target) : "Not set"}</strong>
-        <p>
-          {calc.ended
-            ? "This month’s period has ended"
-            : `${calc.days} days remaining`}
-        </p>
-      </Card>
-    );
-  }
-  if (type === "habits") {
-    const habits = (data.h || []).filter((h: Habit) => h.active);
-    const done = habits.filter((h: Habit) =>
-      (data.hc || []).some(
-        (c: HabitCompletion) =>
-          c.habitId === h.id && c.date === today && c.completed,
-      ),
-    ).length;
-    return (
-      <Card className="widget" onClick={() => nav("/habits")}>
-        <span className="eyebrow">
-          <ListChecks /> Habits
-        </span>
-        <strong>
-          {done} of {habits.length}
-        </strong>
-        <p>
-          {habits.length && done === habits.length
-            ? "All done today"
-            : "Completed today"}
-        </p>
-      </Card>
-    );
-  }
-  const upcoming = (data.c || [])
-    .filter((c: Counter) => c.type === "down")
-    .sort((a: Counter, b: Counter) => a.date.localeCompare(b.date))[0];
-  const ups = (data.c || []).filter((c: Counter) => c.type === "up");
-  return (
-    <Card className="widget" onClick={() => nav("/counters")}>
-      <span className="eyebrow">
-        <Timer /> Counters
-      </span>
-      <strong>
-        {upcoming
-          ? dayDiff(today, upcoming.date) === 0
-            ? "Today"
-            : `${Math.abs(dayDiff(today, upcoming.date))} days`
-          : `${ups.length} milestones`}
-      </strong>
-      <p>{upcoming?.title || "Nothing upcoming yet"}</p>
-    </Card>
   );
 }

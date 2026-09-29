@@ -31,6 +31,9 @@ export interface FinancePlan {
   month: string;
   amount: number;
   includeToday: boolean;
+  periodStart?: string;
+  periodEnd?: string;
+  dailyTarget?: number;
   createdAt: string;
 }
 export interface Habit {
@@ -55,6 +58,7 @@ export interface Counter {
   description?: string;
   icon: string;
   color: string;
+  pinned?: boolean;
   createdAt: string;
 }
 export interface PasswordEntry {

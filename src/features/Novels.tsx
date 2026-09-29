@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Plus,
   BookOpen,
@@ -10,8 +10,11 @@ import {
   Bold,
   Quote,
   ImagePlus,
+  Save,
 } from "lucide-react";
 import { all, get, put, remove } from "../db";
+import { chapterDraftKey, recoverChapterDraft } from "../chapterDraft";
+import type { ChapterDraft } from "../chapterDraft";
 import type { Novel, Chapter } from "../types";
 import { countWords, formatDate, id, now } from "../utils";
 import {
@@ -36,7 +39,14 @@ type Props = {
 };
 export default function Novels(p: Props) {
   if (p.novelId && p.chapterId)
-    return <Editor {...p} novelId={p.novelId} chapterId={p.chapterId} />;
+    return (
+      <Editor
+        key={p.chapterId}
+        {...p}
+        novelId={p.novelId}
+        chapterId={p.chapterId}
+      />
+    );
   if (p.novelId) return <NovelDetail {...p} novelId={p.novelId} />;
   return <Gallery {...p} />;
 }
@@ -446,76 +456,192 @@ function Editor({
   const [chapter, setChapter] = useState<Chapter>();
   const [title, setTitle] = useState("");
   const [words, setWords] = useState(0);
-  const [state, setState] = useState<"saved" | "saving" | "error">("saved");
+  const [state, setState] = useState<"saved" | "unsaved" | "saving" | "error">(
+    "saved",
+  );
+  const [boldActive, setBoldActive] = useState(false);
   const editor = useRef<HTMLDivElement>(null);
+  const selectionRef = useRef<Range | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const chapterRef = useRef<Chapter | undefined>(undefined);
+  const draftRef = useRef<ChapterDraft | null>(null);
+  const revisionRef = useRef(0);
+  const savedRevisionRef = useRef(0);
+  const writeQueue = useRef<Promise<void>>(Promise.resolve());
   const titleRef = useRef("");
-  useEffect(() => {
-    get<Chapter>("chapters", chapterId).then((c) => {
-      if (c) {
-        setChapter(c);
-        chapterRef.current = c;
-        setTitle(c.title);
-        titleRef.current = c.title;
-        setWords(c.wordCount);
-        if (editor.current) editor.current.innerHTML = c.content;
-      }
-    });
-  }, [chapterId]);
-  const persist = async () => {
-    if (!chapterRef.current || !editor.current) return;
+  const persist = async (): Promise<boolean> => {
+    const base = chapterRef.current;
+    const draft = draftRef.current;
+    if (!base || !draft) return false;
+    const revision = revisionRef.current;
+    if (revision <= savedRevisionRef.current) return true;
     setState("saving");
-    const content = editor.current.innerHTML;
-    const wc = countWords(content);
-    const updated = {
-      ...chapterRef.current,
-      title: titleRef.current.trim() || "Untitled chapter",
-      content,
-      wordCount: wc,
+    const updated: Chapter = {
+      ...base,
+      title: draft.title.trim() || "Untitled chapter",
+      content: draft.content,
+      wordCount: countWords(draft.content),
       updatedAt: now(),
     };
-    try {
+    const write = writeQueue.current.then(async () => {
       await put("chapters", updated);
-      const n = await get<Novel>("novels", novelId);
-      if (n) await put("novels", { ...n, updatedAt: updated.updatedAt });
-      setChapter(updated);
+      try {
+        const novel = await get<Novel>("novels", novelId);
+        if (novel)
+          await put("novels", { ...novel, updatedAt: updated.updatedAt });
+      } catch {
+        // The chapter write has already committed; its place in the gallery can refresh later.
+      }
+    });
+    writeQueue.current = write.catch(() => {});
+    try {
+      await write;
       chapterRef.current = updated;
-      setWords(wc);
-      setState("saved");
+      savedRevisionRef.current = Math.max(savedRevisionRef.current, revision);
+      if (revision === revisionRef.current) {
+        setState("saved");
+        try {
+          const stored = localStorage.getItem(chapterDraftKey(chapterId));
+          if (stored && JSON.parse(stored).modifiedAt <= draft.modifiedAt)
+            localStorage.removeItem(chapterDraftKey(chapterId));
+        } catch {
+          // The committed chapter remains in IndexedDB.
+        }
+      }
+      return true;
     } catch {
-      setState("error");
+      if (revision === revisionRef.current) setState("error");
+      return false;
     }
   };
   const changed = () => {
-    if (!editor.current) return;
-    setWords(countWords(editor.current.innerHTML));
-    setState("saving");
+    const content = editor.current?.innerHTML ?? draftRef.current?.content;
+    if (content === undefined) return;
+    const draft: ChapterDraft = {
+      title: titleRef.current,
+      content,
+      modifiedAt: Date.now(),
+    };
+    draftRef.current = draft;
+    revisionRef.current += 1;
+    setWords(countWords(content));
+    setState("unsaved");
+    try {
+      localStorage.setItem(chapterDraftKey(chapterId), JSON.stringify(draft));
+    } catch {
+      // Autosave still writes to IndexedDB if local draft storage is unavailable.
+    }
     clearTimeout(timer.current);
-    timer.current = window.setTimeout(persist, 600);
+    timer.current = window.setTimeout(() => void persist(), 600);
   };
   useEffect(() => {
-    const flush = () => void persist();
-    addEventListener("pagehide", flush);
+    let active = true;
+    setChapter(undefined);
+    selectionRef.current = null;
+    setBoldActive(false);
+    get<Chapter>("chapters", chapterId).then((c) => {
+      if (c && active) {
+        const draft = recoverChapterDraft(c);
+        const opening = draft
+          ? {
+              ...c,
+              title: draft.title,
+              content: draft.content,
+              wordCount: countWords(draft.content),
+            }
+          : c;
+        setChapter(opening);
+        chapterRef.current = c;
+        draftRef.current = draft || {
+          title: c.title,
+          content: c.content,
+          modifiedAt: Date.parse(c.updatedAt),
+        };
+        revisionRef.current = draft ? 1 : 0;
+        savedRevisionRef.current = 0;
+        setTitle(opening.title);
+        titleRef.current = opening.title;
+        setWords(opening.wordCount);
+        setState(draft ? "unsaved" : "saved");
+        if (draft) timer.current = window.setTimeout(() => void persist(), 600);
+      }
+    });
     return () => {
+      active = false;
+    };
+  }, [chapterId]);
+  useLayoutEffect(() => {
+    if (chapter?.id === chapterId && editor.current) {
+      editor.current.innerHTML = chapter.content;
+    }
+  }, [chapterId, chapter?.id]);
+  const rememberSelection = () => {
+    const selection = getSelection();
+    if (
+      !editor.current ||
+      !selection?.rangeCount ||
+      !editor.current.contains(selection.anchorNode)
+    )
+      return;
+    selectionRef.current = selection.getRangeAt(0).cloneRange();
+    setBoldActive(document.queryCommandState("bold"));
+  };
+  useEffect(() => {
+    document.addEventListener("selectionchange", rememberSelection);
+    return () =>
+      document.removeEventListener("selectionchange", rememberSelection);
+  }, []);
+  useEffect(() => {
+    const flush = () => {
       clearTimeout(timer.current);
       void persist();
-      removeEventListener("pagehide", flush);
     };
-  }, []);
-  const cmd = (name: string, val?: string) => {
-    editor.current?.focus();
-    document.execCommand(name, false, val);
+    addEventListener("pagehide", flush);
+    return () => {
+      removeEventListener("pagehide", flush);
+      flush();
+    };
+  }, [chapterId, novelId]);
+  const focusEditor = () => {
+    if (!editor.current) return;
+    editor.current.focus();
+    const range = selectionRef.current;
+    const selection = getSelection();
+    if (
+      range &&
+      selection &&
+      editor.current.contains(range.commonAncestorContainer)
+    ) {
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
+  const cmd = (name: string) => {
+    focusEditor();
+    document.execCommand(name, false);
+    rememberSelection();
     changed();
   };
   const quotes = () => {
-    editor.current?.focus();
-    const sel = getSelection();
-    if (sel && !sel.isCollapsed) {
-      const text = sel.toString();
-      document.execCommand("insertText", false, `“${text}”`);
-    } else document.execCommand("insertText", false, "“”");
+    focusEditor();
+    document.execCommand("insertText", false, '"');
+    rememberSelection();
     changed();
+  };
+  const saveNow = async () => {
+    if (
+      editor.current &&
+      (editor.current.innerHTML !== draftRef.current?.content ||
+        titleRef.current !== draftRef.current?.title)
+    )
+      changed();
+    clearTimeout(timer.current);
+    let saved = await persist();
+    while (saved && revisionRef.current > savedRevisionRef.current)
+      saved = await persist();
+    if (saved) notify("Chapter saved");
+    else notify("Chapter could not be saved. Please try again.");
+    return saved;
   };
   if (!chapter) return <div className="loading">Opening chapter…</div>;
   return (
@@ -524,42 +650,58 @@ function Editor({
         <IconButton
           label="Back to novel"
           onClick={async () => {
-            await persist();
-            nav(`/novels/${novelId}`);
+            if (await saveNow()) nav(`/novels/${novelId}`);
           }}
         >
           ‹
         </IconButton>
-        <input
-          aria-label="Chapter title"
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            titleRef.current = e.target.value;
-            setState("saving");
-            clearTimeout(timer.current);
-            timer.current = window.setTimeout(persist, 600);
-          }}
-        />
-        <span>
-          {state === "saved"
-            ? "Saved"
-            : state === "saving"
-              ? "Saving…"
-              : "Save failed"}
-        </span>
+        <div className="editor-title-group">
+          <input
+            aria-label="Chapter title"
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              titleRef.current = e.target.value;
+              changed();
+            }}
+          />
+          <span role="status">
+            {state === "saved"
+              ? "Saved"
+              : state === "saving"
+                ? "Saving…"
+                : state === "unsaved"
+                  ? "Unsaved changes"
+                  : "Save failed — retry"}
+          </span>
+        </div>
+        <Button onClick={saveNow}>
+          <Save size={17} /> Save
+        </Button>
       </header>
-      <div className="editor-toolbar" role="toolbar" aria-label="Writing tools">
+      <div
+        className="editor-toolbar"
+        role="toolbar"
+        aria-label="Writing tools"
+        onPointerDownCapture={(event) => {
+          if ((event.target as HTMLElement).closest("button"))
+            event.preventDefault();
+        }}
+      >
         <IconButton label="Undo" onClick={() => cmd("undo")}>
           <Undo2 />
         </IconButton>
         <IconButton label="Redo" onClick={() => cmd("redo")}>
           <Redo2 />
         </IconButton>
-        <IconButton label="Bold" onClick={() => cmd("bold")}>
+        <IconButton
+          label="Bold"
+          aria-pressed={boldActive}
+          onClick={() => cmd("bold")}
+        >
           <Bold />
         </IconButton>
-        <IconButton label="Insert smart double quotes" onClick={quotes}>
+        <IconButton label="Insert double quote" onClick={quotes}>
           <Quote />
         </IconButton>
         <small>{words.toLocaleString()} words</small>
@@ -569,7 +711,11 @@ function Editor({
         className="editor"
         contentEditable
         suppressContentEditableWarning
-        onInput={changed}
+        onInput={() => {
+          changed();
+          rememberSelection();
+        }}
+        onKeyUp={rememberSelection}
         role="textbox"
         aria-multiline="true"
         data-placeholder="Begin writing…"

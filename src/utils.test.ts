@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { currentBudgetPlan } from "./finance";
 import { countWords, dayDiff, financeCalculation, localDate } from "./utils";
 
 describe("local calendar calculations", () => {
@@ -21,10 +22,33 @@ describe("local calendar calculations", () => {
     expect(result.target).toBeCloseTo(157.89, 2);
   });
 
-  it("ends a monthly period after the 28th", () => {
-    expect(financeCalculation(3000, true, new Date(2026, 2, 29)).ended).toBe(
-      true,
-    );
+  it("rolls a budget saved after the 28th into the next period", () => {
+    const result = financeCalculation(3000, true, new Date(2026, 2, 29));
+    expect(result.start).toBe("2026-03-29");
+    expect(result.end).toBe("2026-04-28");
+    expect(result.days).toBe(31);
+    expect(result.target).toBeCloseTo(96.77, 2);
+  });
+
+  it("starts the next period when today is excluded on the 28th", () => {
+    const result = financeCalculation(3000, false, new Date(2026, 8, 28));
+    expect(result.start).toBe("2026-09-29");
+    expect(result.end).toBe("2026-10-28");
+    expect(result.days).toBe(30);
+  });
+
+  it("keeps a budget saved after the 28th active into the next month", () => {
+    const plan = {
+      id: "october",
+      month: "2026-10",
+      amount: 3000,
+      includeToday: true,
+      dailyTarget: 100,
+      createdAt: "2026-09-29T12:00:00.000Z",
+    };
+    expect(currentBudgetPlan([plan], new Date(2026, 8, 29))).toBe(plan);
+    expect(currentBudgetPlan([plan], new Date(2026, 9, 1))).toBe(plan);
+    expect(currentBudgetPlan([plan], new Date(2026, 8, 28))).toBe(plan);
   });
 
   it("uses calendar days across daylight saving changes", () => {

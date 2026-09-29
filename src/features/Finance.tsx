@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, WalletCards } from "lucide-react";
 import { all, put } from "../db";
 import type { FinanceEntry, FinancePlan } from "../types";
+import { currentBudgetPlan, saveBudget } from "../finance";
 import {
   financeCalculation,
   formatDate,
-  id,
-  localDate,
   money,
   monthKey,
   parseLocalDate,
@@ -25,7 +24,7 @@ import {
 export default function Finance({ notify }: { notify: (s: string) => void }) {
   const [amount, setAmount] = useState("");
   const [include, setInclude] = useState(true);
-  const [plans, setPlans] = useState<FinancePlan[]>([]);
+  const [activePlan, setActivePlan] = useState<FinancePlan>();
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [viewMonth, setViewMonth] = useState(monthKey());
   const [error, setError] = useState("");
@@ -34,9 +33,9 @@ export default function Finance({ notify }: { notify: (s: string) => void }) {
       all<FinancePlan>("financePlans"),
       all<FinanceEntry>("financeEntries"),
     ]).then(([p, e]) => {
-      setPlans(p);
       setEntries(e);
-      const current = p.find((x) => x.month === monthKey());
+      const current = currentBudgetPlan(p);
+      setActivePlan(current);
       if (current) {
         setAmount(String(current.amount));
         setInclude(current.includeToday);
@@ -46,40 +45,26 @@ export default function Finance({ notify }: { notify: (s: string) => void }) {
     load();
   }, []);
   const calc = financeCalculation(Number(amount) || 0, include);
+  const unchanged =
+    activePlan &&
+    amount === String(activePlan.amount) &&
+    include === activePlan.includeToday;
+  const displayTarget = unchanged
+    ? (activePlan.dailyTarget ?? calc.target)
+    : calc.target;
+  const displayStart = unchanged
+    ? (activePlan.periodStart ?? calc.start)
+    : calc.start;
+  const displayEnd = unchanged ? (activePlan.periodEnd ?? calc.end) : calc.end;
   const save = async () => {
-    const n = Number(amount);
-    if (!Number.isFinite(n) || n <= 0) {
-      setError("Enter an amount greater than zero.");
-      return;
+    try {
+      await saveBudget(Number(amount), include);
+      setError("");
+      notify("Budget saved");
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save budget.");
     }
-    const existing = plans.find((p) => p.month === monthKey());
-    const plan: FinancePlan = {
-      id: existing?.id || id(),
-      month: monthKey(),
-      amount: n,
-      includeToday: include,
-      createdAt: existing?.createdAt || new Date().toISOString(),
-    };
-    await put("financePlans", plan);
-    for (let i = 0; i < calc.days; i++) {
-      const d = new Date();
-      d.setDate(d.getDate() + (include ? i : i + 1));
-      const date = localDate(d);
-      const old = entries.find(
-        (e) => e.date === date && e.periodStart === calc.start,
-      );
-      await put("financeEntries", {
-        id: old?.id || id(),
-        date,
-        amount: n,
-        dailyTarget: calc.target,
-        periodStart: calc.start,
-        periodEnd: calc.end,
-        completed: old?.completed || false,
-      });
-    }
-    notify("Budget saved");
-    load();
   };
   const toggle = async (e: FinanceEntry) => {
     await put("financeEntries", { ...e, completed: !e.completed });
@@ -98,28 +83,20 @@ export default function Finance({ notify }: { notify: (s: string) => void }) {
       <ErrorNote>{error}</ErrorNote>
       <Card className="budget-card">
         <span className="eyebrow">
-          <WalletCards /> Budget through the 28th
+          <WalletCards /> Budget through{" "}
+          {formatDate(displayEnd, { month: "short", day: "numeric" })}
         </span>
-        {calc.ended ? (
-          <>
-            <h2>This period has ended</h2>
-            <p>
-              It’s after the 28th. Start a new plan when the next month begins;
-              your history remains below.
-            </p>
-          </>
-        ) : (
-          <>
-            <strong>
-              {amount && Number(amount) > 0 ? money(calc.target) : "—"}
-            </strong>
-            <p>
-              per day · {calc.days} {calc.days === 1 ? "day" : "days"} from{" "}
-              {formatDate(calc.start, { month: "short", day: "numeric" })} to
-              the 28th
-            </p>
-          </>
-        )}
+        <strong>
+          {amount && Number(amount) > 0 ? money(displayTarget) : "—"}
+        </strong>
+        <p>
+          per day ·{" "}
+          {unchanged
+            ? "saved plan"
+            : `${calc.days} ${calc.days === 1 ? "day" : "days"}`}{" "}
+          from {formatDate(displayStart, { month: "short", day: "numeric" })} to{" "}
+          {formatDate(displayEnd, { month: "short", day: "numeric" })}
+        </p>
         <Field label="Amount available">
           <div className="money-input">
             <TextInput
@@ -135,8 +112,11 @@ export default function Finance({ notify }: { notify: (s: string) => void }) {
           </div>
         </Field>
         <Toggle label="Include today" checked={include} onChange={setInclude} />
-        <Button disabled={calc.ended || !Number(amount)} onClick={save}>
-          Save monthly budget
+        <Button
+          disabled={!Number.isFinite(Number(amount)) || Number(amount) <= 0}
+          onClick={save}
+        >
+          Save budget
         </Button>
       </Card>
       <div className="month-nav">

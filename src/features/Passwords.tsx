@@ -173,57 +173,75 @@ function PasswordList({
         <div className="password-list">
           {results.map((p) => (
             <Card className="password-card" key={p.id}>
-              <div className="site-avatar">
-                {p.site.slice(0, 1).toUpperCase()}
-              </div>
-              <div className="password-info">
+              <div className="password-card-head">
+                <div className="site-avatar" aria-hidden="true">
+                  {p.site.slice(0, 1).toUpperCase()}
+                </div>
                 <h2>{p.site}</h2>
-                <label>
-                  Name <span>{p.username}</span>
+                <div className="password-actions">
                   <IconButton
-                    label="Copy username"
-                    onClick={() => copy(p.username)}
+                    label={`Edit ${p.site}`}
+                    onClick={() => {
+                      setEditing(p);
+                      setOpen(true);
+                    }}
                   >
-                    <Copy />
+                    <Pencil />
                   </IconButton>
-                </label>
-                <label>
-                  Password{" "}
-                  <span className="password-value">
+                  <IconButton
+                    label={`Delete ${p.site}`}
+                    onClick={() => setDel(p)}
+                  >
+                    <Trash2 />
+                  </IconButton>
+                </div>
+              </div>
+              <div className="credential-row">
+                <div>
+                  <small>Username</small>
+                  <span className="credential-value">{p.username}</span>
+                </div>
+                <IconButton
+                  label={`Copy username for ${p.site}`}
+                  onClick={() => copy(p.username)}
+                >
+                  <Copy />
+                </IconButton>
+              </div>
+              <div className="credential-row">
+                <div>
+                  <small>Password</small>
+                  <span
+                    className="credential-value"
+                    aria-hidden={!shown.has(p.id)}
+                  >
                     {shown.has(p.id) ? p.password : "••••••••••"}
                   </span>
-                  <IconButton
-                    label={shown.has(p.id) ? "Hide password" : "Show password"}
-                    onClick={() =>
-                      setShown((s) => {
-                        const n = new Set(s);
-                        n.has(p.id) ? n.delete(p.id) : n.add(p.id);
-                        return n;
-                      })
-                    }
-                  >
-                    {shown.has(p.id) ? <EyeOff /> : <Eye />}
-                  </IconButton>
-                  <IconButton
-                    label="Copy password"
-                    onClick={() => copy(p.password)}
-                  >
-                    <Copy />
-                  </IconButton>
-                </label>
-              </div>
-              <div className="password-actions">
+                  {!shown.has(p.id) && (
+                    <span className="sr-only">Hidden password</span>
+                  )}
+                </div>
                 <IconButton
-                  label="Edit entry"
-                  onClick={() => {
-                    setEditing(p);
-                    setOpen(true);
-                  }}
+                  label={
+                    shown.has(p.id)
+                      ? `Hide password for ${p.site}`
+                      : `Show password for ${p.site}`
+                  }
+                  onClick={() =>
+                    setShown((s) => {
+                      const n = new Set(s);
+                      n.has(p.id) ? n.delete(p.id) : n.add(p.id);
+                      return n;
+                    })
+                  }
                 >
-                  <Pencil />
+                  {shown.has(p.id) ? <EyeOff /> : <Eye />}
                 </IconButton>
-                <IconButton label="Delete entry" onClick={() => setDel(p)}>
-                  <Trash2 />
+                <IconButton
+                  label={`Copy password for ${p.site}`}
+                  onClick={() => copy(p.password)}
+                >
+                  <Copy />
                 </IconButton>
               </div>
             </Card>
@@ -275,10 +293,13 @@ function PasswordForm({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
+  const canMaskText =
+    typeof CSS !== "undefined" && CSS.supports("-webkit-text-security", "disc");
   useEffect(() => {
     setSite(initial?.site || "");
     setUsername(initial?.username || "");
     setPassword(initial?.password || "");
+    setShow(false);
   }, [initial, open]);
   return (
     <Sheet
@@ -286,17 +307,10 @@ function PasswordForm({
       title={initial ? "Edit password" : "New password"}
       onClose={onClose}
     >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (site.trim() && username.trim() && password)
-            onSave({ site: site.trim(), username: username.trim(), password });
-        }}
-      >
+      <div className="password-entry-form">
         <Field label="Site">
           <TextInput
-            autoFocus
-            required
+            autoComplete="off"
             value={site}
             onChange={(e) => setSite(e.target.value)}
             autoCapitalize="words"
@@ -304,17 +318,22 @@ function PasswordForm({
         </Field>
         <Field label="Name, username, or email">
           <TextInput
-            required
+            autoComplete="off"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
           />
         </Field>
         <Field label="Password">
           <div className="password-input">
             <TextInput
-              required
-              type={show ? "text" : "password"}
+              type={show || canMaskText ? "text" : "password"}
+              className={show ? "input" : "input masked-entry"}
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoCapitalize="none"
@@ -329,12 +348,20 @@ function PasswordForm({
           </div>
         </Field>
         <Button
-          type="submit"
+          type="button"
+          onClick={() => {
+            if (site.trim() && username.trim() && password)
+              onSave({
+                site: site.trim(),
+                username: username.trim(),
+                password,
+              });
+          }}
           disabled={!site.trim() || !username.trim() || !password}
         >
           Save password
         </Button>
-      </form>
+      </div>
     </Sheet>
   );
 }
