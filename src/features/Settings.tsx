@@ -11,6 +11,7 @@ import {
 } from "../ui";
 import { dump, replaceAll, clearAll } from "../db";
 import { downloadJson, localDate } from "../utils";
+import { applyTheme } from "../theme";
 import type { StoreName } from "../types";
 const validStores: StoreName[] = [
   "novels",
@@ -32,7 +33,7 @@ export function SettingsPage({
   notify: (s: string) => void;
 }) {
   const [theme, setTheme] = useState(
-    localStorage.getItem("nook-theme") || "system",
+    localStorage.getItem("nook-theme") || "dark",
   );
   const [confirm, setConfirm] = useState<"export" | "import" | "clear" | null>(
     null,
@@ -43,7 +44,7 @@ export function SettingsPage({
   const changeTheme = (v: string) => {
     setTheme(v);
     localStorage.setItem("nook-theme", v);
-    document.documentElement.dataset.theme = v;
+    applyTheme(v);
   };
   const exportData = async () => {
     try {

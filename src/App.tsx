@@ -9,6 +9,7 @@ import {
 import { seed } from "./db";
 import { Button, ErrorNote, Sheet, Toast } from "./ui";
 import { useOnline } from "./hooks";
+import { applyTheme } from "./theme";
 import { Dashboard } from "./features/Dashboard";
 import { Utilities } from "./features/Utilities";
 import { SettingsPage } from "./features/Settings";
@@ -50,8 +51,12 @@ export function App() {
     return () => removeEventListener("popstate", pop);
   }, []);
   useEffect(() => {
-    const pref = localStorage.getItem("nook-theme") || "system";
-    document.documentElement.dataset.theme = pref;
+    const pref = localStorage.getItem("nook-theme") || "dark";
+    applyTheme(pref);
+    const media = matchMedia("(prefers-color-scheme: light)");
+    const update = () => applyTheme(localStorage.getItem("nook-theme") || "dark");
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
   }, []);
   const ctx = { nav, refresh, version, notify };
   const content = useMemo(() => {
@@ -77,13 +82,11 @@ export function App() {
         return <Utilities nav={nav} />;
     }
   }, [route, ready, version]);
-  const main =
-    route.page === "home" ||
-    route.page === "utilities" ||
-    route.page === "settings";
+  const showNav = !(route.page === "novels" && route.subId);
+  const utilityPage = ["utilities", "novels", "finance", "habits", "counters", "passwords"].includes(route.page);
   return (
     <>
-      <div className="app">
+      <div className={`app ${showNav ? "has-bottom-nav" : ""}`}>
         <ErrorNote>{dbError}</ErrorNote>
         {!online && (
           <div className="offline">
@@ -95,17 +98,19 @@ export function App() {
             {content}
           </Suspense>
         </main>
-        {main && (
+        {showNav && (
           <nav className="bottom-nav" aria-label="Primary">
             <button
               className={route.page === "home" ? "active" : ""}
+              aria-current={route.page === "home" ? "page" : undefined}
               onClick={() => nav("/")}
             >
               <Home />
               <span>Home</span>
             </button>
             <button
-              className={route.page === "utilities" ? "active" : ""}
+              className={utilityPage ? "active" : ""}
+              aria-current={utilityPage ? "page" : undefined}
               onClick={() => nav("/utilities")}
             >
               <Grid2X2 />
@@ -117,6 +122,7 @@ export function App() {
             </button>
             <button
               className={route.page === "settings" ? "active" : ""}
+              aria-current={route.page === "settings" ? "page" : undefined}
               onClick={() => nav("/settings")}
             >
               <SettingsIcon />
