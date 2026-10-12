@@ -1,6 +1,6 @@
 import { all, put } from "./db";
 import type { FinanceEntry, FinancePlan } from "./types";
-import { addDays, financeCalculation, id } from "./utils";
+import { financeCalculation, id, localDate } from "./utils";
 
 export function currentBudgetPlan(plans: FinancePlan[], date = new Date()) {
   const period = financeCalculation(0, true, date).end.slice(0, 7);
@@ -12,42 +12,36 @@ export function currentBudgetPlan(plans: FinancePlan[], date = new Date()) {
   return plans.find((plan) => plan.month === period);
 }
 
-export async function saveBudget(amount: number, includeToday: boolean) {
+export async function saveBudget(amount: number) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Enter an amount greater than zero.");
   }
 
-  const calc = financeCalculation(amount, includeToday);
+  const savedAt = new Date();
+  const calc = financeCalculation(amount, true, savedAt);
   const month = calc.end.slice(0, 7);
-  const [plans, entries] = await Promise.all([
-    all<FinancePlan>("financePlans"),
-    all<FinanceEntry>("financeEntries"),
-  ]);
+  const plans = await all<FinancePlan>("financePlans");
   const existing = plans.find((plan) => plan.month === month);
   await put("financePlans", {
     id: existing?.id || id(),
     month,
     amount,
-    includeToday,
+    includeToday: true,
     periodStart: calc.start,
     periodEnd: calc.end,
     dailyTarget: calc.target,
     createdAt: existing?.createdAt || new Date().toISOString(),
   } satisfies FinancePlan);
 
-  for (let day = calc.start; day <= calc.end; day = addDays(day, 1)) {
-    const previous = entries.find(
-      (entry) => entry.date === day && entry.periodEnd === calc.end,
-    );
-    await put("financeEntries", {
-      id: previous?.id || id(),
-      date: day,
-      amount,
-      dailyTarget: calc.target,
-      periodStart: calc.start,
-      periodEnd: calc.end,
-      completed: previous?.completed || false,
-    } satisfies FinanceEntry);
-  }
+  await put("financeEntries", {
+    id: id(),
+    date: localDate(savedAt),
+    amount,
+    dailyTarget: calc.target,
+    periodStart: calc.start,
+    periodEnd: calc.end,
+    completed: false,
+    loggedAt: savedAt.toISOString(),
+  } satisfies FinanceEntry);
   return calc;
 }

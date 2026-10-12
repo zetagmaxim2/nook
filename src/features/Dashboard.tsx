@@ -6,6 +6,10 @@ import {
   Plus,
   SlidersHorizontal,
   WalletCards,
+  BookOpen,
+  KeyRound,
+  ListChecks,
+  Timer,
 } from "lucide-react";
 import { all, put } from "../db";
 import { currentBudgetPlan, saveBudget } from "../finance";
@@ -30,7 +34,6 @@ type Props = {
 export function Dashboard({ nav, version, refresh, notify }: Props) {
   const [plans, setPlans] = useState<FinancePlan[]>([]);
   const [amount, setAmount] = useState("");
-  const [includeToday, setIncludeToday] = useState(true);
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completions, setCompletions] = useState<HabitCompletion[]>([]);
   const [counters, setCounters] = useState<Counter[]>([]);
@@ -51,7 +54,6 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
       setPlans(nextPlans);
       const plan = currentBudgetPlan(nextPlans);
       setAmount(plan ? String(plan.amount) : "");
-      setIncludeToday(plan?.includeToday ?? true);
       setHabits(nextHabits);
       setCompletions(nextCompletions);
       setCounters(nextCounters);
@@ -64,14 +66,8 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
   const plan = currentBudgetPlan(plans);
   const value = Number(amount);
   const validAmount = Number.isFinite(value) && value > 0;
-  const calculation = financeCalculation(validAmount ? value : 0, includeToday);
+  const calculation = financeCalculation(validAmount ? value : 0, true);
   const changed = amount !== (plan ? String(plan.amount) : "");
-  const target =
-    !changed && plan?.dailyTarget != null
-      ? plan.dailyTarget
-      : calculation.target;
-  const periodEnd =
-    !changed && plan?.periodEnd ? plan.periodEnd : calculation.end;
   const creatine =
     habits.find((habit) => habit.id === "habit-creatine") ||
     habits.find((habit) => /creatine/i.test(habit.name));
@@ -86,13 +82,13 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
     event.preventDefault();
     setSaving(true);
     try {
-      await saveBudget(value, includeToday);
+      await saveBudget(value);
       setBudgetError("");
-      notify("Budget saved");
+      notify("Amount logged");
       refresh();
     } catch (error) {
       setBudgetError(
-        error instanceof Error ? error.message : "Could not save budget.",
+        error instanceof Error ? error.message : "Could not log amount.",
       );
     } finally {
       setSaving(false);
@@ -161,25 +157,22 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
       <Card className="home-budget">
         <div className="home-card-top">
           <span className="eyebrow">
-            <WalletCards /> Daily budget
+            <WalletCards /> Daily spending guide
           </span>
           <button className="text-link" onClick={() => nav("/finance")}>
-            History <ChevronRight />
+            Log <ChevronRight />
           </button>
         </div>
         <strong className="home-budget-value">
-          {validAmount ? money(target) : "Set a budget"}
+          {validAmount ? money(calculation.target) : "Enter an amount"}
         </strong>
         <p className="home-budget-caption">
           {changed && validAmount ? "Preview · " : ""}
-          {changed || !plan
-            ? `${calculation.days} days`
-            : "Your saved target"}{" "}
-          through {formatDate(periodEnd, { month: "short", day: "numeric" })}
+          {calculation.days} {calculation.days === 1 ? "day" : "days"} through {formatDate(calculation.end, { month: "short", day: "numeric" })}
         </p>
         <form className="home-budget-form" onSubmit={submitBudget}>
           <label>
-            <span>Amount available</span>
+            <span>Amount you have to spend</span>
             <div className="money-input">
               <input
                 className="input"
@@ -195,7 +188,7 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
             </div>
           </label>
           <Button type="submit" disabled={!validAmount || saving}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? "Logging…" : "Log amount"}
           </Button>
         </form>
         <ErrorNote>{budgetError}</ErrorNote>
@@ -228,6 +221,30 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
           <ChevronRight />
         </IconButton>
       </Card>
+
+      <section className="home-spaces" aria-labelledby="spaces-title">
+        <div className="home-section-heading">
+          <div>
+            <span className="eyebrow">Go straight there</span>
+            <h2 id="spaces-title">Your spaces</h2>
+          </div>
+        </div>
+        <div className="home-space-grid">
+          {([
+            ["Finance", "/finance", WalletCards],
+            ["Novels", "/novels", BookOpen],
+            ["Habits", "/habits", ListChecks],
+            ["Counters", "/counters", Timer],
+            ["Passwords", "/passwords", KeyRound],
+          ] as const).map(([label, path, Icon]) => (
+            <button key={path} onClick={() => nav(path)}>
+              <Icon size={20} />
+              <span>{label}</span>
+              <ChevronRight size={16} />
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="home-pinned" aria-labelledby="pinned-title">
         <div className="home-section-heading">

@@ -25,6 +25,7 @@ export interface FinanceEntry {
   periodStart: string;
   periodEnd: string;
   completed: boolean;
+  loggedAt?: string;
 }
 export interface FinancePlan {
   id: Id;

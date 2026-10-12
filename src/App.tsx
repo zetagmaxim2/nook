@@ -2,8 +2,9 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Home,
   Grid2X2,
-  Settings as SettingsIcon,
-  Search,
+  BookOpen,
+  WalletCards,
+  KeyRound,
   WifiOff,
 } from "lucide-react";
 import { seed } from "./db";
@@ -65,7 +66,7 @@ export function App() {
       case "home":
         return <Dashboard {...ctx} />;
       case "utilities":
-        return <Utilities nav={nav} />;
+        return <Utilities nav={nav} onSearch={() => setSearch(true)} />;
       case "settings":
         return <SettingsPage {...ctx} />;
       case "novels":
@@ -79,11 +80,11 @@ export function App() {
       case "passwords":
         return <Passwords {...ctx} />;
       default:
-        return <Utilities nav={nav} />;
+        return <Utilities nav={nav} onSearch={() => setSearch(true)} />;
     }
   }, [route, ready, version]);
   const showNav = !(route.page === "novels" && route.subId);
-  const utilityPage = ["utilities", "novels", "finance", "habits", "counters", "passwords"].includes(route.page);
+  const morePage = ["utilities", "habits", "counters", "settings"].includes(route.page);
   return (
     <>
       <div className={`app ${showNav ? "has-bottom-nav" : ""}`}>
@@ -109,24 +110,36 @@ export function App() {
               <span>Home</span>
             </button>
             <button
-              className={utilityPage ? "active" : ""}
-              aria-current={utilityPage ? "page" : undefined}
+              className={route.page === "finance" ? "active" : ""}
+              aria-current={route.page === "finance" ? "page" : undefined}
+              onClick={() => nav("/finance")}
+            >
+              <WalletCards />
+              <span>Finance</span>
+            </button>
+            <button
+              className={route.page === "novels" ? "active" : ""}
+              aria-current={route.page === "novels" ? "page" : undefined}
+              onClick={() => nav("/novels")}
+            >
+              <BookOpen />
+              <span>Novels</span>
+            </button>
+            <button
+              className={route.page === "passwords" ? "active" : ""}
+              aria-current={route.page === "passwords" ? "page" : undefined}
+              onClick={() => nav("/passwords")}
+            >
+              <KeyRound />
+              <span>Passwords</span>
+            </button>
+            <button
+              className={morePage ? "active" : ""}
+              aria-current={morePage ? "page" : undefined}
               onClick={() => nav("/utilities")}
             >
               <Grid2X2 />
-              <span>Utilities</span>
-            </button>
-            <button onClick={() => setSearch(true)}>
-              <Search />
-              <span>Search</span>
-            </button>
-            <button
-              className={route.page === "settings" ? "active" : ""}
-              aria-current={route.page === "settings" ? "page" : undefined}
-              onClick={() => nav("/settings")}
-            >
-              <SettingsIcon />
-              <span>Settings</span>
+              <span>More</span>
             </button>
           </nav>
         )}

@@ -26,6 +26,8 @@ import {
   TextInput,
   Toggle,
 } from "../ui";
+const maskedTextSupported =
+  typeof CSS !== "undefined" && CSS.supports("-webkit-text-security", "disc");
 const hash = async (s: string) =>
   Array.from(
     new Uint8Array(
@@ -48,8 +50,12 @@ export default function Passwords({ notify }: { notify: (s: string) => void }) {
           <Field label="Privacy PIN">
             <TextInput
               autoFocus
-              type="password"
+              type={maskedTextSupported ? "text" : "password"}
+              className="input masked-entry"
+              autoComplete="off"
               inputMode="numeric"
+              autoCorrect="off"
+              spellCheck={false}
               value={pin}
               onChange={(e) => setPin(e.target.value)}
               onKeyDown={async (e) => {
@@ -293,8 +299,6 @@ function PasswordForm({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
-  const canMaskText =
-    typeof CSS !== "undefined" && CSS.supports("-webkit-text-security", "disc");
   useEffect(() => {
     setSite(initial?.site || "");
     setUsername(initial?.username || "");
@@ -311,6 +315,7 @@ function PasswordForm({
         <Field label="Site">
           <TextInput
             autoComplete="off"
+            name="nook-site-label"
             value={site}
             onChange={(e) => setSite(e.target.value)}
             autoCapitalize="words"
@@ -319,6 +324,7 @@ function PasswordForm({
         <Field label="Name, username, or email">
           <TextInput
             autoComplete="off"
+            name="nook-entry-label"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoCapitalize="none"
@@ -329,9 +335,10 @@ function PasswordForm({
         <Field label="Password">
           <div className="password-input">
             <TextInput
-              type={show || canMaskText ? "text" : "password"}
+              type={maskedTextSupported ? "text" : "password"}
               className={show ? "input" : "input masked-entry"}
               autoComplete="off"
+              name="nook-private-value"
               autoCorrect="off"
               spellCheck={false}
               value={password}
@@ -407,8 +414,12 @@ function LockSettings({
       {enabled && (
         <Field label="New 4–8 digit PIN">
           <TextInput
-            type="password"
+            type={maskedTextSupported ? "text" : "password"}
+            className="input masked-entry"
+            autoComplete="off"
             inputMode="numeric"
+            autoCorrect="off"
+            spellCheck={false}
             value={pin}
             onChange={(e) =>
               setPin(e.target.value.replace(/\D/g, "").slice(0, 8))

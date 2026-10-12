@@ -525,7 +525,7 @@ p {
   transform: translateX(-50%);
   width: min(100%, 900px);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   padding: 7px max(8px, env(safe-area-inset-left)) calc(7px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-right));
   background: var(--surface);
   -webkit-backdrop-filter: blur(24px);
@@ -564,6 +564,50 @@ p {
 .bottom-nav button.active {
   color: var(--accent);
   font-weight: 700;
+}
+
+.more-actions,
+.home-space-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.more-actions {
+  margin-bottom: 25px;
+}
+
+.more-actions button,
+.home-space-grid button {
+  min-width: 0;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  font-weight: 650;
+}
+
+.more-actions button > svg,
+.home-space-grid button > svg:first-child {
+  flex: none;
+  color: var(--accent);
+}
+
+.home-space-grid button > svg:last-child {
+  width: 16px;
+  flex: none;
+  margin-left: auto;
+  color: var(--muted);
+}
+
+.home-spaces {
+  margin-top: 28px;
 }
 
 .tool-list {
@@ -1415,6 +1459,8 @@ p {
 }
 
 .password-card {
+  min-width: 0;
+  max-width: 100%;
   padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1427,6 +1473,7 @@ p {
 }
 
 .site-avatar {
+  flex: none;
   width: 45px;
   height: 45px;
   background: var(--accent);
@@ -1583,8 +1630,9 @@ p {
 .credential-value {
   display: block;
   max-width: 100%;
-  overflow-x: auto;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
   font-size: 15px;
   font-weight: 600;
   -webkit-overflow-scrolling: touch;
@@ -1622,7 +1670,7 @@ p {
   min-width: 0;
 }
 
-.password-input .masked-entry {
+.masked-entry {
   -webkit-text-security: disc;
 }
 

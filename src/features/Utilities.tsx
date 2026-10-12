@@ -5,6 +5,8 @@ import {
   Timer,
   KeyRound,
   ChevronRight,
+  Search,
+  Settings,
 } from "lucide-react";
 import { PageHeader, Card } from "../ui";
 const tools = [
@@ -44,10 +46,15 @@ const tools = [
     "gold",
   ],
 ] as const;
-export function Utilities({ nav }: { nav: (p: string) => void }) {
+export function Utilities({ nav, onSearch }: { nav: (p: string) => void; onSearch: () => void }) {
   return (
     <div className="page">
-      <PageHeader title="Utilities" subtitle="Everything in its place." />
+      <PageHeader title="More" subtitle="All your spaces and app options." />
+      <div className="more-actions">
+        <button onClick={onSearch}><Search /> Search everything</button>
+        <button onClick={() => nav("/settings")}><Settings /> Settings</button>
+      </div>
+      <h2 className="section-title">Your spaces</h2>
       <div className="tool-list">
         {tools.map(([name, body, path, Icon, tone]) => (
           <Card
