@@ -7,9 +7,11 @@ import {
   ChevronRight,
   Search,
   Settings,
+  ContactRound,
 } from "lucide-react";
 import { PageHeader, Card } from "../ui";
 const tools = [
+  ["People", "The details that help you stay close.", "/contacts", ContactRound, "lavender"],
   [
     "Novels",
     "Write, organize, and keep every chapter.",

@@ -70,6 +70,29 @@ export interface PasswordEntry {
   createdAt: string;
   updatedAt: string;
 }
+export interface ContactRelative {
+  id: Id;
+  name: string;
+  relation: string;
+  contactId?: Id;
+}
+export interface Contact {
+  id: Id;
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  birthday?: string; // MM-DD; birth year is optional
+  birthYear?: number;
+  instagram?: string;
+  tiktok?: string;
+  facebook?: string;
+  otherSocial?: string;
+  notes?: string;
+  relatives: ContactRelative[];
+  createdAt: string;
+  updatedAt: string;
+}
 export type WidgetType = "finance" | "habits" | "counters" | "novels";
 export interface DashboardWidget {
   id: Id;
@@ -91,5 +114,6 @@ export type StoreName =
   | "habitCompletions"
   | "counters"
   | "passwords"
+  | "contacts"
   | "widgets"
   | "settings";

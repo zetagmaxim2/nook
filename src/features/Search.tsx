@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { all } from "../db";
 import { SearchBar, EmptyState } from "../ui";
-import type { Novel, Chapter, PasswordEntry, Counter, Habit } from "../types";
+import type { Novel, Chapter, PasswordEntry, Counter, Habit, Contact } from "../types";
 type R = { title: string; subtitle: string; path: string; kind: string };
 export function GlobalSearch({ nav }: { nav: (p: string) => void }) {
   const [q, setQ] = useState("");
@@ -13,8 +13,15 @@ export function GlobalSearch({ nav }: { nav: (p: string) => void }) {
       all<PasswordEntry>("passwords"),
       all<Counter>("counters"),
       all<Habit>("habits"),
-    ]).then(([n, ch, p, c, h]) =>
+      all<Contact>("contacts"),
+    ]).then(([n, ch, p, c, h, people]) =>
       setData([
+        ...people.map((x) => ({
+          title: x.name,
+          subtitle: [x.phone, x.email, ...(x.relatives || []).map((r) => r.name)].filter(Boolean).join(" · "),
+          path: `/contacts/${x.id}`,
+          kind: "Person",
+        })),
         ...n.map((x) => ({
           title: x.title,
           subtitle: x.description,
@@ -59,7 +66,7 @@ export function GlobalSearch({ nav }: { nav: (p: string) => void }) {
     <>
       <SearchBar
         autoFocus
-        placeholder="Novels, chapters, sites…"
+        placeholder="People, novels, sites…"
         value={q}
         onChange={(e) => setQ(e.target.value)}
       />

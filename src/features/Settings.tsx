@@ -22,6 +22,7 @@ const validStores: StoreName[] = [
   "habitCompletions",
   "counters",
   "passwords",
+  "contacts",
   "widgets",
   "settings",
 ];
@@ -51,7 +52,7 @@ export function SettingsPage({
       downloadJson(
         {
           format: "nook-backup",
-          version: 1,
+          version: 2,
           exportedAt: new Date().toISOString(),
           data: await dump(),
         },
@@ -181,7 +182,7 @@ export function SettingsPage({
       <Confirm
         open={confirm === "clear"}
         title="Clear absolutely everything?"
-        body="All novels, chapters, budgets, habits, counters, passwords, and preferences will be permanently removed."
+        body="All contacts, novels, chapters, budgets, habits, counters, passwords, and preferences will be permanently removed."
         confirm="Clear all data"
         danger
         onClose={() => setConfirm(null)}

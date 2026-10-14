@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import {
   Home,
   Grid2X2,
-  BookOpen,
+  ContactRound,
   WalletCards,
   KeyRound,
   WifiOff,
@@ -15,6 +15,7 @@ import { Dashboard } from "./features/Dashboard";
 import { Utilities } from "./features/Utilities";
 import { SettingsPage } from "./features/Settings";
 import { GlobalSearch } from "./features/Search";
+import Contacts from "./features/Contacts";
 const Novels = lazy(() => import("./features/Novels"));
 const Finance = lazy(() => import("./features/Finance"));
 const Habits = lazy(() => import("./features/Habits"));
@@ -79,12 +80,14 @@ export function App() {
         return <Counters {...ctx} />;
       case "passwords":
         return <Passwords {...ctx} />;
+      case "contacts":
+        return <Contacts {...ctx} contactId={route.id} />;
       default:
         return <Utilities nav={nav} onSearch={() => setSearch(true)} />;
     }
   }, [route, ready, version]);
   const showNav = !(route.page === "novels" && route.subId);
-  const morePage = ["utilities", "habits", "counters", "settings"].includes(route.page);
+  const morePage = ["utilities", "habits", "counters", "settings", "novels"].includes(route.page);
   return (
     <>
       <div className={`app ${showNav ? "has-bottom-nav" : ""}`}>
@@ -118,12 +121,12 @@ export function App() {
               <span>Finance</span>
             </button>
             <button
-              className={route.page === "novels" ? "active" : ""}
-              aria-current={route.page === "novels" ? "page" : undefined}
-              onClick={() => nav("/novels")}
+              className={route.page === "contacts" ? "active" : ""}
+              aria-current={route.page === "contacts" ? "page" : undefined}
+              onClick={() => nav("/contacts")}
             >
-              <BookOpen />
-              <span>Novels</span>
+              <ContactRound />
+              <span>People</span>
             </button>
             <button
               className={route.page === "passwords" ? "active" : ""}

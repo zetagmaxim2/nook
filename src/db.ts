@@ -1,6 +1,6 @@
 import type { StoreName } from "./types";
 const DB_NAME = "nook-local";
-const VERSION = 1;
+const VERSION = 2;
 const stores: StoreName[] = [
   "novels",
   "chapters",
@@ -10,6 +10,7 @@ const stores: StoreName[] = [
   "habitCompletions",
   "counters",
   "passwords",
+  "contacts",
   "widgets",
   "settings",
 ];
@@ -53,6 +54,7 @@ export function getDb() {
           ["date", "date"],
         ]);
         make("passwords", [["site", "site"]]);
+        make("contacts", [["name", "name"]]);
         make("widgets", [["order", "order"]]);
         make("settings");
       };

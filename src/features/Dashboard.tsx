@@ -7,13 +7,16 @@ import {
   SlidersHorizontal,
   WalletCards,
   BookOpen,
+  ContactRound,
+  Cake,
   KeyRound,
   ListChecks,
   Timer,
 } from "lucide-react";
 import { all, put } from "../db";
 import { currentBudgetPlan, saveBudget } from "../finance";
-import type { Counter, FinancePlan, Habit, HabitCompletion } from "../types";
+import type { Counter, FinancePlan, Habit, HabitCompletion, Contact } from "../types";
+import { nextBirthday } from "../contacts";
 import {
   dayDiff,
   financeCalculation,
@@ -37,6 +40,7 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
   const [habits, setHabits] = useState<Habit[]>([]);
   const [completions, setCompletions] = useState<HabitCompletion[]>([]);
   const [counters, setCounters] = useState<Counter[]>([]);
+  const [people, setPeople] = useState<Contact[]>([]);
   const [pinSheet, setPinSheet] = useState(
     () => new URLSearchParams(location.search).get("configure") === "1",
   );
@@ -50,13 +54,15 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
       all<Habit>("habits"),
       all<HabitCompletion>("habitCompletions"),
       all<Counter>("counters"),
-    ]).then(([nextPlans, nextHabits, nextCompletions, nextCounters]) => {
+      all<Contact>("contacts"),
+    ]).then(([nextPlans, nextHabits, nextCompletions, nextCounters, nextPeople]) => {
       setPlans(nextPlans);
       const plan = currentBudgetPlan(nextPlans);
       setAmount(plan ? String(plan.amount) : "");
       setHabits(nextHabits);
       setCompletions(nextCompletions);
       setCounters(nextCounters);
+      setPeople(nextPeople);
     });
   }, [version]);
 
@@ -77,6 +83,7 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
   );
   const creatineDone = !!completion?.completed;
   const pinned = counters.filter((counter) => counter.pinned);
+  const birthdays = people.map((person) => ({ person, next: nextBirthday(person) })).filter((item) => item.next && item.next.days <= 30).sort((a, b) => a.next!.days - b.next!.days);
 
   const submitBudget = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -232,10 +239,11 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
         <div className="home-space-grid">
           {([
             ["Finance", "/finance", WalletCards],
-            ["Novels", "/novels", BookOpen],
+            ["People", "/contacts", ContactRound],
             ["Habits", "/habits", ListChecks],
             ["Counters", "/counters", Timer],
             ["Passwords", "/passwords", KeyRound],
+            ["Novels", "/novels", BookOpen],
           ] as const).map(([label, path, Icon]) => (
             <button key={path} onClick={() => nav(path)}>
               <Icon size={20} />
@@ -293,6 +301,14 @@ export function Dashboard({ nav, version, refresh, notify }: Props) {
             <ChevronRight size={18} />
           </button>
         )}
+      </section>
+
+      <section className="home-birthdays" aria-labelledby="birthdays-title">
+        <div className="home-section-heading">
+          <div><span className="eyebrow">Keep close</span><h2 id="birthdays-title">Coming birthdays</h2></div>
+          <button className="text-link" onClick={() => nav("/contacts")}>People <ChevronRight /></button>
+        </div>
+        {birthdays.length ? <div className="home-birthday-list">{birthdays.slice(0, 4).map(({ person, next }) => <button key={person.id} onClick={() => nav(`/contacts/${person.id}`)}><span className="home-birthday-icon"><Cake size={20} /></span><span><b>{person.name}</b><small>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(next!.date)}{next!.age ? ` · turning ${next!.age}` : ""}</small></span><strong>{next!.days === 0 ? "Today!" : next!.days === 1 ? "Tomorrow" : `In ${next!.days} days`}</strong></button>)}</div> : <button className="home-birthday-empty" onClick={() => nav("/contacts")}>No birthdays in the next 30 days. Add a birthday to a person’s card. <ChevronRight size={18} /></button>}
       </section>
 
       <Sheet
